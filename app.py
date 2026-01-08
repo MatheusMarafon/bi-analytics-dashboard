@@ -45,8 +45,8 @@ data_range = st.sidebar.date_input(
 # --- Dia 04 e 05: Layout e Gráficos --- 
 st.title("Estrutura de Layout Avançada")
 
-tab_home, tab_dados, tab_filtros, tab_graficos, tab_plotly, tab_tendencia, tab_comparativo, tab_mapa = st.tabs(
-    ["Início", "Visualização de Dados", "Análise de Filtros", "Gráficos", "Plotly", "Tendências Temporais", "Comparativos", "Distribuição Geográfica"]
+tab_home, tab_dados, tab_filtros, tab_graficos, tab_plotly, tab_tendencia, tab_comparativo, tab_mapa, tab_design = st.tabs(
+    ["Início", "Visualização de Dados", "Análise de Filtros", "Gráficos", "Plotly", "Tendências Temporais", "Comparativos", "Distribuição Geográfica", "Design Final"]
 )
 
 with tab_home:
@@ -256,3 +256,46 @@ with tab_mapa:
         title=f"Distribuição de Profissionais - {cidade}"
     )
     st.plotly_chart(fig_mapa, width='stretch')
+
+with tab_design:
+    st.header("Identidade Visual e Customização")
+    
+    # Criando dados para o exemplo de design
+    df_design = pd.DataFrame({
+        "Métrica": ["Performance", "Engajamento", "Retenção", "Qualidade"],
+        "Valor": [85, 92, 78, 88]
+    })
+
+    # Definindo uma paleta de cores customizada (Hex Colors)
+    minha_paleta = ["#003f5c", "#7a5195", "#ef5675", "#ffa600"]
+
+    fig_design = px.bar(
+        df_design, 
+        x="Métrica", 
+        y="Valor", 
+        color="Métrica",
+        color_discrete_sequence=minha_paleta, # Aplica a paleta
+        title="KPIs de Engenharia de Dados"
+    )
+
+    # Customização Profissional via update_layout e update_traces
+    fig_design.update_layout(
+        title_font_size=24,
+        xaxis_title="Categorias de BI",
+        yaxis_title="Percentual (%)",
+        legend_title="Indicadores",
+        plot_bgcolor="rgba(0,0,0,0)", # Fundo transparente
+        paper_bgcolor="rgba(0,0,0,0)",
+        font_color="#888",
+        margin=dict(l=20, r=20, t=60, b=20)
+    )
+
+    fig_design.update_traces(
+        marker_line_color='rgb(8,48,107)',
+        marker_line_width=1.5,
+        opacity=0.8
+    )
+
+    st.plotly_chart(fig_design, width='stretch')
+    
+    st.success("Design finalizado com identidade visual consistente!")
