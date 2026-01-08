@@ -360,33 +360,35 @@ with tab_design:
 with tab_sql:
     st.header("Explorador de Dados SQL")
     
-    conn_url = "postgresql://postgres@localhost:5432/postgres"
-
     try:
+        # Buscando os campos individuais do segredo
+        db = st.secrets["postgres"]
+        
+        # Montando a URL dinamicamente
+        conn_url = f"postgresql://{db['user']}@{db['host']}:{db['port']}/{db['database']}"
+        
         engine = create_engine(conn_url)
+        
         with engine.connect() as conn:
-            # Busca nomes das tabelas
             query_tabelas = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
             lista_tabelas = pd.read_sql(query_tabelas, conn)['table_name'].tolist()
 
             if lista_tabelas:
                 tabela = st.selectbox("Selecione a tabela:", lista_tabelas)
-
-                # Query dinâmica com filtro WHERE
                 query = f"SELECT * FROM {tabela} WHERE 1=1"
                 
-                # Exemplo de filtro automático por cidade (se a coluna existir)
                 colunas = pd.read_sql(f"SELECT * FROM {tabela} LIMIT 0", conn).columns
                 if 'cidade' in colunas:
                     query += f" AND cidade = '{cidade}'"
 
                 df_res = pd.read_sql(f"{query} LIMIT 100", conn)
 
-                st.code(query) # Mostra a query sendo executada
+                st.success("Conexão protegida via Secrets")
+                st.code(query) 
                 st.dataframe(df_res, width='stretch')
                 st.metric("Linhas", len(df_res))
             else:
                 st.warning("Sem tabelas no banco.")
 
     except Exception as e:
-        st.error(f"Erro: {e}")
+        st.error(f"Erro ao ler segredos ou conectar: {e}")
