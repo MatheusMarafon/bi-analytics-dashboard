@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 # Configurações da página
 st.set_page_config(page_title="Estudo Dashboard", layout="wide")
@@ -361,23 +361,23 @@ with tab_sql:
     st.header("Explorador de Dados SQL")
     
     try:
-        # Buscando os campos individuais do segredo
+        # 1. Configuração de Conexão Segura
         db = st.secrets["postgres"]
-        
-        # Montando a URL dinamicamente
         conn_url = f"postgresql://{db['user']}@{db['host']}:{db['port']}/{db['database']}"
-        
         engine = create_engine(conn_url)
         
         with engine.connect() as conn:
+            # 2. Busca nomes das tabelas
             query_tabelas = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
             lista_tabelas = pd.read_sql(query_tabelas, conn)['table_name'].tolist()
 
             if lista_tabelas:
                 tabela = st.selectbox("Selecione a tabela:", lista_tabelas)
-                query = f"SELECT * FROM {tabela} WHERE 1=1"
                 
+                # 3. Consulta Dinâmica com Filtro
+                query = f"SELECT * FROM {tabela} WHERE 1=1"
                 colunas = pd.read_sql(f"SELECT * FROM {tabela} LIMIT 0", conn).columns
+                
                 if 'cidade' in colunas:
                     query += f" AND cidade = '{cidade}'"
 
@@ -387,6 +387,47 @@ with tab_sql:
                 st.code(query) 
                 st.dataframe(df_res, width='stretch')
                 st.metric("Linhas", len(df_res))
+
+
+
+                # 4. Formulário de Inserção Dinâmico
+                st.markdown("---")
+                st.subheader(f"Inserir Novos Dados em: {tabela}")
+
+                with st.form("form_registro", clear_on_submit=True):
+                    # Pegamos as colunas reais da tabela (exceto possivelmente IDs auto-incremento)
+                    colunas_reais = pd.read_sql(f"SELECT * FROM {tabela} LIMIT 0", conn).columns.tolist()
+                    
+                    # Criamos um dicionário para armazenar os inputs
+                    novos_dados = {}
+                    
+                    st.write("Preencha os campos abaixo:")
+                    cols = st.columns(len(colunas_reais[:4])) # Limita a 4 colunas para não quebrar o layout
+                    
+                    for i, col_name in enumerate(colunas_reais[:4]):
+                        with cols[i]:
+                            novos_dados[col_name] = st.text_input(f"Coluna: {col_name}")
+
+                    botao_submit = st.form_submit_button("Salvar no Banco")
+
+                    if botao_submit:
+                        if any(novos_dados.values()): # Verifica se algo foi preenchido
+                            try:
+                                # Monta a query de INSERT dinamicamente
+                                colunas_sql = ", ".join(novos_dados.keys())
+                                placeholders = ", ".join([f":{c}" for c in novos_dados.keys()])
+                                query_insert = text(f"INSERT INTO {tabela} ({colunas_sql}) VALUES ({placeholders})")
+                                
+                                with engine.begin() as conn_insert:
+                                    conn_insert.execute(query_insert, novos_dados)
+                                
+                                st.success(f"Registro adicionado em {tabela}!")
+                                st.balloons()
+                                st.cache_data.clear() # Limpa o cache para atualizar a tabela acima
+                            except Exception as error:
+                                st.error(f"Erro ao inserir: {error}")
+                        else:
+                            st.warning("Preencha pelo menos um campo.")
             else:
                 st.warning("Sem tabelas no banco.")
 
