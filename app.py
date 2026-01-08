@@ -358,27 +358,35 @@ with tab_design:
     st.success("Design finalizado com identidade visual consistente!")
 
 with tab_sql:
-    st.header("Conexão PostgreSQL")
-
-    # Credenciais do DB
-    DB_USER = "postgres"
-    DB_PASS = ""
-    DB_HOST = "localhost"
-    DB_PORT = "5432"
-    DB_NAME = "postgres"
-
-    # String de conexão
-    conn_url = f"postgresql://{DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    st.header("Explorador de Dados SQL")
+    
+    conn_url = "postgresql://postgres@localhost:5432/postgres"
 
     try:
         engine = create_engine(conn_url)
         with engine.connect() as conn:
-            query = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
-            df_tables = pd.read_sql(query, conn)
+            # Busca nomes das tabelas
+            query_tabelas = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
+            lista_tabelas = pd.read_sql(query_tabelas, conn)['table_name'].tolist()
 
-            st.success(f"Conectado com sucesso ao bando '{DB_NAME}' via Docker!")
-            st.write("Tabelas detectadas:")
-            st.dataframe(df_tables)
+            if lista_tabelas:
+                tabela = st.selectbox("Selecione a tabela:", lista_tabelas)
+
+                # Query dinâmica com filtro WHERE
+                query = f"SELECT * FROM {tabela} WHERE 1=1"
+                
+                # Exemplo de filtro automático por cidade (se a coluna existir)
+                colunas = pd.read_sql(f"SELECT * FROM {tabela} LIMIT 0", conn).columns
+                if 'cidade' in colunas:
+                    query += f" AND cidade = '{cidade}'"
+
+                df_res = pd.read_sql(f"{query} LIMIT 100", conn)
+
+                st.code(query) # Mostra a query sendo executada
+                st.dataframe(df_res, width='stretch')
+                st.metric("Linhas", len(df_res))
+            else:
+                st.warning("Sem tabelas no banco.")
 
     except Exception as e:
-        st.error(f"Não foi possível conectar: {e}")
+        st.error(f"Erro: {e}")
