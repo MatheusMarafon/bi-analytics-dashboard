@@ -36,11 +36,17 @@ tecnologias = st.sidebar.multiselect(
 st.sidebar.subheader("Experiência")
 anos_xp = st.sidebar.slider("Anos de experiência na área:", 0, 20, 1)
 
+st.sidebar.subheader("Período de Análise")
+data_range = st.sidebar.date_input(
+    "Selecione o intervalo:",
+    value=(pd.to_datetime("2025-01-01"), pd.to_datetime("2025-12-31"))
+)
+
 # --- Dia 04 e 05: Layout e Gráficos --- 
 st.title("Estrutura de Layout Avançada")
 
-tab_home, tab_dados, tab_filtros, tab_graficos, tab_plotly = st.tabs(
-    ["Início", "Visualização de Dados", "Análise de Filtros", "Gráficos", "Plotly"]
+tab_home, tab_dados, tab_filtros, tab_graficos, tab_plotly, tab_tendencia = st.tabs(
+    ["Início", "Visualização de Dados", "Análise de Filtros", "Gráficos", "Plotly", "Tendências Temporais"]
 )
 
 with tab_home:
@@ -143,3 +149,32 @@ with tab_plotly:
             hover_name="Tecnologia"
         )
         st.plotly_chart(fig_scatter, width='stretch')
+
+with tab_tendencia:
+    st.header("Análise de Tendência Temporal")
+    
+    # Gerando dados temporais fictícios
+    datas = pd.date_range(start="2025-01-01", end="2025-12-31", freq="M")
+    df_vendas = pd.DataFrame({
+        "Data": datas,
+        "Vendas": np.random.randint(100, 500, size=len(datas)),
+        "Meta": np.random.randint(200, 400, size=len(datas))
+    })
+
+    # Filtrando os dados com base na Sidebar
+    if len(data_range) == 2:
+        start_date, end_date = data_range
+        mask = (df_vendas["Data"] >= pd.to_datetime(start_date)) & (df_vendas["Data"] <= pd.to_datetime(end_date))
+        df_filtrado = df_vendas.loc[mask]
+
+        fig_linha = px.line(
+            df_filtrado, 
+            x="Data", 
+            y=["Vendas", "Meta"],
+            title=f"Evolução de Performance em {cidade}",
+            markers=True,
+            template="plotly_white"
+        )
+        st.plotly_chart(fig_linha, width='stretch')
+    else:
+        st.warning("Por favor, selecione as datas de início e fim.")
