@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px 
+import plotly.express as px
+from sqlalchemy import create_engine
 
 # Configurações da página
 st.set_page_config(page_title="Estudo Dashboard", layout="wide")
@@ -39,14 +40,36 @@ anos_xp = st.sidebar.slider("Anos de experiência na área:", 0, 20, 1)
 st.sidebar.subheader("Período de Análise")
 data_range = st.sidebar.date_input(
     "Selecione o intervalo:",
-    value=(pd.to_datetime("2025-01-01"), pd.to_datetime("2025-12-31"))
+    value=(pd.to_datetime("2025-01-01"), pd.to_datetime("2025-12-31")),
 )
 
-# --- Dia 04 e 05: Layout e Gráficos --- 
+# --- Dia 04 e 05: Layout e Gráficos ---
 st.title("Estrutura de Layout Avançada")
 
-tab_home, tab_dados, tab_filtros, tab_graficos, tab_plotly, tab_tendencia, tab_comparativo, tab_mapa, tab_design = st.tabs(
-    ["Início", "Visualização de Dados", "Análise de Filtros", "Gráficos", "Plotly", "Tendências Temporais", "Comparativos", "Distribuição Geográfica", "Design Final"]
+(
+    tab_home,
+    tab_dados,
+    tab_filtros,
+    tab_graficos,
+    tab_plotly,
+    tab_tendencia,
+    tab_comparativo,
+    tab_mapa,
+    tab_design,
+    tab_sql,
+) = st.tabs(
+    [
+        "Início",
+        "Visualização de Dados",
+        "Análise de Filtros",
+        "Gráficos",
+        "Plotly",
+        "Tendências Temporais",
+        "Comparativos",
+        "Distribuição Geográfica",
+        "Design Final",
+        "Conexão SQL",
+    ]
 )
 
 with tab_home:
@@ -98,8 +121,12 @@ with tab_graficos:
 
     # Criando dados fictícios que reagem ao slider de XP
     chart_data = pd.DataFrame(
-        np.random.randn(anos_xp + 1, len(tecnologias)) if tecnologias else np.random.randn(anos_xp + 1, 1),
-        columns = tecnologias if tecnologias else ["Geral"] 
+        (
+            np.random.randn(anos_xp + 1, len(tecnologias))
+            if tecnologias
+            else np.random.randn(anos_xp + 1, 1)
+        ),
+        columns=tecnologias if tecnologias else ["Geral"],
     )
 
     col_graf1, col_graf2 = st.columns(2)
@@ -107,36 +134,48 @@ with tab_graficos:
     with col_graf1:
         st.subheader("Evolução (Line Chart)")
         st.line_chart(chart_data)
-    
+
     with col_graf2:
         st.subheader("Distribuição (Bar Chart)")
         st.bar_chart(chart_data)
-    
-    st.caption(f"Dados gerados aleatoriamente para representar {anos_xp} pontos de dados em {cidade}.")
+
+    st.caption(
+        f"Dados gerados aleatoriamente para representar {anos_xp} pontos de dados em {cidade}."
+    )
 
 with tab_plotly:
     st.header("Gráficos Customizados com Plotly Express")
-    
+
     # Dados para o gráfico baseados nos filtros
-    df_plotly = pd.DataFrame({
-        "Tecnologia": tecnologias if tecnologias else ["Nenhuma"],
-        "Demanda": np.random.randint(10, 100, size=len(tecnologias)) if tecnologias else [0],
-        "Mercado": np.random.randint(1000, 5000, size=len(tecnologias)) if tecnologias else [0]
-    })
+    df_plotly = pd.DataFrame(
+        {
+            "Tecnologia": tecnologias if tecnologias else ["Nenhuma"],
+            "Demanda": (
+                np.random.randint(10, 100, size=len(tecnologias))
+                if tecnologias
+                else [0]
+            ),
+            "Mercado": (
+                np.random.randint(1000, 5000, size=len(tecnologias))
+                if tecnologias
+                else [0]
+            ),
+        }
+    )
 
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("Gráfico de Barras Plotly")
         fig_bar = px.bar(
-            df_plotly, 
-            x="Tecnologia", 
-            y="Demanda", 
+            df_plotly,
+            x="Tecnologia",
+            y="Demanda",
             color="Tecnologia",
             title=f"Demanda em {cidade}",
-            template="plotly_dark"
+            template="plotly_dark",
         )
-        st.plotly_chart(fig_bar, width='stretch')
+        st.plotly_chart(fig_bar, width="stretch")
 
     with col2:
         st.subheader("Relação Demanda vs Mercado")
@@ -146,36 +185,40 @@ with tab_plotly:
             y="Mercado",
             size="Demanda",
             color="Tecnologia",
-            hover_name="Tecnologia"
+            hover_name="Tecnologia",
         )
-        st.plotly_chart(fig_scatter, width='stretch')
+        st.plotly_chart(fig_scatter, width="stretch")
 
 with tab_tendencia:
     st.header("Análise de Tendência Temporal")
-    
+
     # Gerando dados temporais fictícios
-    datas = pd.date_range(start="2025-01-01", end="2025-12-31", freq="M")
-    df_vendas = pd.DataFrame({
-        "Data": datas,
-        "Vendas": np.random.randint(100, 500, size=len(datas)),
-        "Meta": np.random.randint(200, 400, size=len(datas))
-    })
+    datas = pd.date_range(start="2025-01-01", end="2025-12-31", freq="ME")
+    df_vendas = pd.DataFrame(
+        {
+            "Data": datas,
+            "Vendas": np.random.randint(100, 500, size=len(datas)),
+            "Meta": np.random.randint(200, 400, size=len(datas)),
+        }
+    )
 
     # Filtrando os dados com base na Sidebar
     if len(data_range) == 2:
         start_date, end_date = data_range
-        mask = (df_vendas["Data"] >= pd.to_datetime(start_date)) & (df_vendas["Data"] <= pd.to_datetime(end_date))
+        mask = (df_vendas["Data"] >= pd.to_datetime(start_date)) & (
+            df_vendas["Data"] <= pd.to_datetime(end_date)
+        )
         df_filtrado = df_vendas.loc[mask]
 
         fig_linha = px.line(
-            df_filtrado, 
-            x="Data", 
+            df_filtrado,
+            x="Data",
             y=["Vendas", "Meta"],
             title=f"Evolução de Performance em {cidade}",
             markers=True,
-            template="plotly_white"
+            template="plotly_white",
         )
-        st.plotly_chart(fig_linha, width='stretch')
+        st.plotly_chart(fig_linha, width="stretch")
     else:
         st.warning("Por favor, selecione as datas de início e fim.")
 
@@ -187,37 +230,52 @@ with tab_comparativo:
     with col_comp1:
         st.subheader("Comparativo por Tecnologia")
         # Criando dados para barras agrupadas
-        df_comp = pd.DataFrame({
-            "Tecnologia": tecnologias * 2 if tecnologias else ["Geral"] * 2,
-            "Valor": np.random.randint(40, 100, size=len(tecnologias)*2) if tecnologias else [50, 60],
-            "Tipo": ["Realizado"] * len(tecnologias) + ["Previsto"] * len(tecnologias) if tecnologias else ["Realizado", "Previsto"]
-        })
-        
-        fig_agrupado = px.bar(
-            df_comp, 
-            x="Tecnologia", 
-            y="Valor", 
-            color="Tipo", 
-            barmode="group",
-            title="Realizado vs Previsto"
+        df_comp = pd.DataFrame(
+            {
+                "Tecnologia": tecnologias * 2 if tecnologias else ["Geral"] * 2,
+                "Valor": (
+                    np.random.randint(40, 100, size=len(tecnologias) * 2)
+                    if tecnologias
+                    else [50, 60]
+                ),
+                "Tipo": (
+                    ["Realizado"] * len(tecnologias) + ["Previsto"] * len(tecnologias)
+                    if tecnologias
+                    else ["Realizado", "Previsto"]
+                ),
+            }
         )
-        st.plotly_chart(fig_agrupado, width='stretch')
+
+        fig_agrupado = px.bar(
+            df_comp,
+            x="Tecnologia",
+            y="Valor",
+            color="Tipo",
+            barmode="group",
+            title="Realizado vs Previsto",
+        )
+        st.plotly_chart(fig_agrupado, width="stretch")
 
     with col_comp2:
         st.subheader("Funil de Contratação")
         # Dados para o gráfico de funil
-        df_funil = pd.DataFrame({
-            "Etapa": ["Visualizações", "Candidaturas", "Entrevistas", "Propostas", "Contratações"],
-            "Quantidade": [1000, 450, 120, 30, 10]
-        })
-        
-        fig_funil = px.funnel(
-            df_funil, 
-            x="Quantidade", 
-            y="Etapa",
-            title="Funil de Recrutamento Tech"
+        df_funil = pd.DataFrame(
+            {
+                "Etapa": [
+                    "Visualizações",
+                    "Candidaturas",
+                    "Entrevistas",
+                    "Propostas",
+                    "Contratações",
+                ],
+                "Quantidade": [1000, 450, 120, 30, 10],
+            }
         )
-        st.plotly_chart(fig_funil, width='stretch')
+
+        fig_funil = px.funnel(
+            df_funil, x="Quantidade", y="Etapa", title="Funil de Recrutamento Tech"
+        )
+        st.plotly_chart(fig_funil, width="stretch")
 
 with tab_mapa:
     st.header("Visualização Geoespacial")
@@ -227,15 +285,15 @@ with tab_mapa:
         "São Paulo": [-23.55, -46.63],
         "Rio de Janeiro": [-22.90, -43.17],
         "Curitiba": [-25.42, -49.27],
-        "Belo Horizonte": [-19.91, -43.93]
+        "Belo Horizonte": [-19.91, -43.93],
     }
-    
+
     lat_base, lon_base = coords.get(cidade, [-23.55, -46.63])
 
     # Gerando pontos aleatórios ao redor da cidade selecionada
     df_mapa = pd.DataFrame(
         np.random.randn(100, 2) / [50, 50] + [lat_base, lon_base],
-        columns=['lat', 'lon']
+        columns=["lat", "lon"],
     )
 
     st.subheader(f"Densidade de Talentos em {cidade}")
@@ -244,38 +302,39 @@ with tab_mapa:
 
     st.markdown("---")
     st.subheader("Mapa Detalhado (Plotly)")
-    
+
     # Mapa mais profissional usando Plotly
-    fig_mapa = px.scatter_mapbox(
-        df_mapa, 
-        lat="lat", 
-        lon="lon", 
-        zoom=10, 
+    fig_mapa = px.scatter_map(
+        df_mapa,
+        lat="lat",
+        lon="lon",
+        zoom=10,
         height=400,
-        mapbox_style="carto-positron",
-        title=f"Distribuição de Profissionais - {cidade}"
+        title=f"Distribuição de Profissionais - {cidade}",
     )
-    st.plotly_chart(fig_mapa, width='stretch')
+    st.plotly_chart(fig_mapa, width="stretch")
 
 with tab_design:
     st.header("Identidade Visual e Customização")
-    
+
     # Criando dados para o exemplo de design
-    df_design = pd.DataFrame({
-        "Métrica": ["Performance", "Engajamento", "Retenção", "Qualidade"],
-        "Valor": [85, 92, 78, 88]
-    })
+    df_design = pd.DataFrame(
+        {
+            "Métrica": ["Performance", "Engajamento", "Retenção", "Qualidade"],
+            "Valor": [85, 92, 78, 88],
+        }
+    )
 
     # Definindo uma paleta de cores customizada (Hex Colors)
     minha_paleta = ["#003f5c", "#7a5195", "#ef5675", "#ffa600"]
 
     fig_design = px.bar(
-        df_design, 
-        x="Métrica", 
-        y="Valor", 
+        df_design,
+        x="Métrica",
+        y="Valor",
         color="Métrica",
-        color_discrete_sequence=minha_paleta, # Aplica a paleta
-        title="KPIs de Engenharia de Dados"
+        color_discrete_sequence=minha_paleta,
+        title="KPIs de Engenharia de Dados",
     )
 
     # Customização Profissional via update_layout e update_traces
@@ -284,18 +343,42 @@ with tab_design:
         xaxis_title="Categorias de BI",
         yaxis_title="Percentual (%)",
         legend_title="Indicadores",
-        plot_bgcolor="rgba(0,0,0,0)", # Fundo transparente
+        plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
         font_color="#888",
-        margin=dict(l=20, r=20, t=60, b=20)
+        margin=dict(l=20, r=20, t=60, b=20),
     )
 
     fig_design.update_traces(
-        marker_line_color='rgb(8,48,107)',
-        marker_line_width=1.5,
-        opacity=0.8
+        marker_line_color="rgb(8,48,107)", marker_line_width=1.5, opacity=0.8
     )
 
-    st.plotly_chart(fig_design, width='stretch')
-    
+    st.plotly_chart(fig_design, width="stretch")
+
     st.success("Design finalizado com identidade visual consistente!")
+
+with tab_sql:
+    st.header("Conexão PostgreSQL")
+
+    # Credenciais do DB
+    DB_USER = "postgres"
+    DB_PASS = ""
+    DB_HOST = "localhost"
+    DB_PORT = "5432"
+    DB_NAME = "postgres"
+
+    # String de conexão
+    conn_url = f"postgresql://{DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+    try:
+        engine = create_engine(conn_url)
+        with engine.connect() as conn:
+            query = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
+            df_tables = pd.read_sql(query, conn)
+
+            st.success(f"Conectado com sucesso ao bando '{DB_NAME}' via Docker!")
+            st.write("Tabelas detectadas:")
+            st.dataframe(df_tables)
+
+    except Exception as e:
+        st.error(f"Não foi possível conectar: {e}")
