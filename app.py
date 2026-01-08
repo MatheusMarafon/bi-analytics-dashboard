@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-
+import numpy as np
 # Configurações da página
 st.set_page_config(page_title="Estudo Dashboard", layout="wide")
 
@@ -34,11 +34,11 @@ tecnologias = st.sidebar.multiselect(
 st.sidebar.subheader("Experiência")
 anos_xp = st.sidebar.slider("Anos de experiência na área:", 0, 20, 1)
 
-# --- Dia 04: Layout Avançado (Tabs e Colunas)
+# --- Dia 04 e 05: Layout e Gráficos --- 
 st.title("Estrutura de Layout Avançada")
 
-tab_home, tab_dados, tab_filtros = st.tabs(
-    ["Início", "Visualização de Dados", "Análise de Filtros"]
+tab_home, tab_dados, tab_filtros, tab_graficos = st.tabs(
+    ["Início", "Visualização de Dados", "Análise de Filtros", "Gráficos"]
 )
 
 with tab_home:
@@ -83,3 +83,25 @@ with tab_filtros:
             st.write("Perfil com experiência avançada detectado!")
         else:
             st.write("Perfil em desenvolvimento de carreira.")
+
+# --- Dia 05: Primeiro Gráficos ---
+with tab_graficos:
+    st.header("Gráficos Básicos Interativos")
+
+    # Criando dados fictícios que reagem ao slider de XP
+    chart_data = pd.DataFrame(
+        np.random.randn(anos_xp + 1, len(tecnologias)) if tecnologias else np.random.randn(anos_xp + 1, 1),
+        columns = tecnologias if tecnologias else ["Geral"] 
+    )
+
+    col_graf1, col_graf2 = st.columns(2)
+
+    with col_graf1:
+        st.subheader("Evolução (Line Chart)")
+        st.line_chart(chart_data)
+    
+    with col_graf2:
+        st.subheader("Distribuição (Bar Chart)")
+        st.bar_chart(chart_data)
+    
+    st.caption(f"Dados gerados aleatoriamente para representar {anos_xp} pontos de dados em {cidade}.")
