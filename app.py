@@ -45,8 +45,8 @@ data_range = st.sidebar.date_input(
 # --- Dia 04 e 05: Layout e Gráficos --- 
 st.title("Estrutura de Layout Avançada")
 
-tab_home, tab_dados, tab_filtros, tab_graficos, tab_plotly, tab_tendencia, tab_comparativo = st.tabs(
-    ["Início", "Visualização de Dados", "Análise de Filtros", "Gráficos", "Plotly", "Tendências Temporais", "Comparativos"]
+tab_home, tab_dados, tab_filtros, tab_graficos, tab_plotly, tab_tendencia, tab_comparativo, tab_mapa = st.tabs(
+    ["Início", "Visualização de Dados", "Análise de Filtros", "Gráficos", "Plotly", "Tendências Temporais", "Comparativos", "Distribuição Geográfica"]
 )
 
 with tab_home:
@@ -218,3 +218,41 @@ with tab_comparativo:
             title="Funil de Recrutamento Tech"
         )
         st.plotly_chart(fig_funil, width='stretch')
+
+with tab_mapa:
+    st.header("Visualização Geoespacial")
+
+    # Coordenadas aproximadas das cidades da sua sidebar
+    coords = {
+        "São Paulo": [-23.55, -46.63],
+        "Rio de Janeiro": [-22.90, -43.17],
+        "Curitiba": [-25.42, -49.27],
+        "Belo Horizonte": [-19.91, -43.93]
+    }
+    
+    lat_base, lon_base = coords.get(cidade, [-23.55, -46.63])
+
+    # Gerando pontos aleatórios ao redor da cidade selecionada
+    df_mapa = pd.DataFrame(
+        np.random.randn(100, 2) / [50, 50] + [lat_base, lon_base],
+        columns=['lat', 'lon']
+    )
+
+    st.subheader(f"Densidade de Talentos em {cidade}")
+    # Comando nativo do Streamlit para mapas rápidos
+    st.map(df_mapa)
+
+    st.markdown("---")
+    st.subheader("Mapa Detalhado (Plotly)")
+    
+    # Mapa mais profissional usando Plotly
+    fig_mapa = px.scatter_mapbox(
+        df_mapa, 
+        lat="lat", 
+        lon="lon", 
+        zoom=10, 
+        height=400,
+        mapbox_style="carto-positron",
+        title=f"Distribuição de Profissionais - {cidade}"
+    )
+    st.plotly_chart(fig_mapa, width='stretch')
