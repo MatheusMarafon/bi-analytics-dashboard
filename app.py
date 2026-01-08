@@ -4,68 +4,82 @@ import pandas as pd
 # Configurações da página
 st.set_page_config(page_title="Estudo Dashboard", layout="wide")
 
-# Dia 01: Hello World
-st.title("Hello, World!")
-st.write("Bem-vindo ao meu dashboard de BI com Streamlit")
-st.markdown("---")
-
-# Dia 02: Input Widgets
+# --- Dia 02: Sidebar (Layout Avançado) ---
 st.sidebar.header("Filtros do Dashboard")
 
-# Selectbox (Seleção Única)
 st.sidebar.subheader("Localização")
 cidade = st.sidebar.selectbox(
     "Escolha a cidade:",
     options=["São Paulo", "Rio de Janeiro", "Curitiba", "Belo Horizonte"],
 )
 
-# Multiselect (Seleção Múltipla)
 st.sidebar.subheader("Categorias")
 tecnologias = st.sidebar.multiselect(
-    "Selecione as tecnologias:",
-    options=["Python", "SQL", "Airflow", "Docker", "AWS"],
+    "Selecione as tecnologias",
+    options=[
+        "Python",
+        "SQL",
+        "HTML",
+        "CSS",
+        "React",
+        "React Native",
+        "JavaScript",
+        "Java",
+        "C",
+        "C#",
+    ],
     default=["Python", "SQL"],
 )
 
-# Slider (Intervalo)
 st.sidebar.subheader("Experiência")
 anos_xp = st.sidebar.slider("Anos de experiência na área:", 0, 20, 1)
 
-# Dia 03: Display de Dados
-st.header("Dia 03: Displau de Dados")
+# --- Dia 04: Layout Avançado (Tabs e Colunas)
+st.title("Estrutura de Layout Avançada")
 
-# Criando um DataFrame de exemplo (simulando carga de csv)
-dados_vendas = {
-    'Produto': ['Teclado', 'Mouse', 'Monitor', 'Notebook'],
-    'Preço': [150.50, 80.00, 900.00, 4500.00],
-    'Estoque': [15, 30, 10, 5]
-}
-df = pd.DataFrame(dados_vendas)
+tab_home, tab_dados, tab_filtros = st.tabs(
+    ["Início", "Visualização de Dados", "Análise de Filtros"]
+)
 
-col_esq, col_dir = st.columns(2)
+with tab_home:
+    st.header("Hello, World!")
+    st.write("Bem-vindo ao meu Dashboard de BI com Streamlit")
+    st.info("Navegue pelas abas acima para ver a evolução do projeto.")
 
-with col_esq:
-    st.subheader("Visualização Interativa (st.dataframe)")
-    st.dataframe(df, use_container_width=True)
+with tab_dados:
+    st.header("Dia 03: Display de Dados")
 
-with col_dir:
-    st.subheader("Visualização Estática (st.table)")
-    st.table(df)
+    dados_vendas = {
+        "Produto": ["Teclado", "Mouse", "Monitor", "Notebook"],
+        "Preço": [150.50, 80.00, 900.00, 4500.00],
+        "Estoque": [15, 30, 10, 5],
+    }
+    df = pd.DataFrame(dados_vendas)
 
-# Exibindo resultados
-st.markdown("---")
-st.header("Visualização de Filtros (Dia 02)")
-col1, col2 = st.columns(2)
+    col_esq, col_dir = st.columns(2)
+    with col_esq:
+        st.subheader("Interativo (st.dataframe)")
+        st.dataframe(df, width="stretch")
+    with col_dir:
+        st.subheader("Estático (st.table)")
+        st.table(df)
 
-with col1:
-    st.info(f"**Cidade selecionada:** {cidade}")
-    st.info(f"**Anos de experiência:** {anos_xp}")
+with tab_filtros:
+    st.header("Análise de Filtros")
 
-with col2:
-    st.success(f"**Tecnologias focadas:** {', '.join(tecnologias)}")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Cidade", cidade)
+    m2.metric("XP", f"{anos_xp} anos")
+    m3.metric("Tecnologias", len(tecnologias))
 
-# Exemplo de lógica
-if anos_xp > 5:
-    st.write("Perfil com experiência avançada detectado!")
-else:
-    st.write("Perfil em desenvolvimento de carreira.")
+    st.markdown("---")
+
+    col_info1, col_info2 = st.columns([1, 1])
+    with col_info1:
+        st.success(f"**Tecnologias focadas:** {', '.join(tecnologias)}")
+
+    with col_info2:
+        if anos_xp > 5:
+            st.write("Perfil com experiência avançada detectado!")
+        else:
+            st.write("Perfil em desenvolvimento de carreira.")
