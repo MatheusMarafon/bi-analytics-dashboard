@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+venv/
+.env
+*.pyc
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Data (não subimos bases pesadas para o git)
+data/
