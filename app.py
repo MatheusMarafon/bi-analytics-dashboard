@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 
 # Configurações da página
 st.set_page_config(page_title="Estudo Dashboard", layout="wide")
@@ -28,11 +29,32 @@ tecnologias = st.sidebar.multiselect(
 
 # Slider (Intervalo)
 st.sidebar.subheader("Experiência")
-# CORREÇÃO AQUI: Adicionado o componente st.sidebar.slider
 anos_xp = st.sidebar.slider("Anos de experiência na área:", 0, 20, 1)
 
+# Dia 03: Display de Dados
+st.header("Dia 03: Displau de Dados")
+
+# Criando um DataFrame de exemplo (simulando carga de csv)
+dados_vendas = {
+    'Produto': ['Teclado', 'Mouse', 'Monitor', 'Notebook'],
+    'Preço': [150.50, 80.00, 900.00, 4500.00],
+    'Estoque': [15, 30, 10, 5]
+}
+df = pd.DataFrame(dados_vendas)
+
+col_esq, col_dir = st.columns(2)
+
+with col_esq:
+    st.subheader("Visualização Interativa (st.dataframe)")
+    st.dataframe(df, use_container_width=True)
+
+with col_dir:
+    st.subheader("Visualização Estática (st.table)")
+    st.table(df)
+
 # Exibindo resultados
-st.header("Visualização de Filtros")
+st.markdown("---")
+st.header("Visualização de Filtros (Dia 02)")
 col1, col2 = st.columns(2)
 
 with col1:
