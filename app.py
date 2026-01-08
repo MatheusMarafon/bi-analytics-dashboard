@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import time
 from sqlalchemy import create_engine, text
 
 # Configurações da página
@@ -358,78 +359,80 @@ with tab_design:
     st.success("Design finalizado com identidade visual consistente!")
 
 with tab_sql:
-    st.header("Explorador de Dados SQL")
+    st.header("Explorador de Dados SQL Otimizado")
     
     try:
-        # 1. Configuração de Conexão Segura
         db = st.secrets["postgres"]
         conn_url = f"postgresql://{db['user']}@{db['host']}:{db['port']}/{db['database']}"
         engine = create_engine(conn_url)
         
         with engine.connect() as conn:
-            # 2. Busca nomes das tabelas
             query_tabelas = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
             lista_tabelas = pd.read_sql(query_tabelas, conn)['table_name'].tolist()
 
             if lista_tabelas:
                 tabela = st.selectbox("Selecione a tabela:", lista_tabelas)
                 
-                # 3. Consulta Dinâmica com Filtro
-                query = f"SELECT * FROM {tabela} WHERE 1=1"
-                colunas = pd.read_sql(f"SELECT * FROM {tabela} LIMIT 0", conn).columns
+                # --- OTIMIZAÇÃO DIA 05: Seleção de Colunas ---
+                colunas_disponiveis = pd.read_sql(f"SELECT * FROM {tabela} LIMIT 0", conn).columns.tolist()
                 
-                if 'cidade' in colunas:
-                    query += f" AND cidade = '{cidade}'"
+                colunas_selecionadas = st.multiselect(
+                    "Selecione as colunas (Evite SELECT *):", 
+                    options=colunas_disponiveis,
+                    default=colunas_disponiveis[:3]
+                )
 
-                df_res = pd.read_sql(f"{query} LIMIT 100", conn)
+                if colunas_selecionadas:
+                    # Medindo o tempo de execução
+                    start_time = time.time()
+                    
+                    cols_str = ", ".join(colunas_selecionadas)
+                    query = f"SELECT {cols_str} FROM {tabela} WHERE 1=1"
+                    
+                    if 'cidade' in colunas_disponiveis:
+                        query += f" AND cidade = '{cidade}'"
 
-                st.success("Conexão protegida via Secrets")
-                st.code(query) 
-                st.dataframe(df_res, width='stretch')
-                st.metric("Linhas", len(df_res))
+                    df_res = pd.read_sql(f"{query} LIMIT 1000", conn)
+                    
+                    end_time = time.time()
+                    
+                    # Display de Performance
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Tempo", f"{end_time - start_time:.4f}s")
+                    c2.metric("Linhas", len(df_res))
+                    with c3:
+                         # Mostra o tamanho real da tabela no Postgres
+                         size_res = conn.execute(text(f"SELECT pg_size_pretty(pg_total_relation_size('{tabela}'))")).fetchone()
+                         st.metric("Tamanho em Disco", size_res[0])
 
-
-
-                # 4. Formulário de Inserção Dinâmico
+                    st.code(query, language="sql") 
+                    st.dataframe(df_res, width='stretch')
+                
+                # 4. Formulário de Inserção (Mantido seu código dinâmico)
                 st.markdown("---")
                 st.subheader(f"Inserir Novos Dados em: {tabela}")
-
                 with st.form("form_registro", clear_on_submit=True):
-                    # Pegamos as colunas reais da tabela (exceto possivelmente IDs auto-incremento)
-                    colunas_reais = pd.read_sql(f"SELECT * FROM {tabela} LIMIT 0", conn).columns.tolist()
-                    
-                    # Criamos um dicionário para armazenar os inputs
                     novos_dados = {}
-                    
                     st.write("Preencha os campos abaixo:")
-                    cols = st.columns(len(colunas_reais[:4])) # Limita a 4 colunas para não quebrar o layout
-                    
-                    for i, col_name in enumerate(colunas_reais[:4]):
+                    cols = st.columns(len(colunas_disponiveis[:4]))
+                    for i, col_name in enumerate(colunas_disponiveis[:4]):
                         with cols[i]:
                             novos_dados[col_name] = st.text_input(f"Coluna: {col_name}")
 
-                    botao_submit = st.form_submit_button("Salvar no Banco")
-
-                    if botao_submit:
-                        if any(novos_dados.values()): # Verifica se algo foi preenchido
+                    if st.form_submit_button("Salvar no Banco"):
+                        if any(novos_dados.values()):
                             try:
-                                # Monta a query de INSERT dinamicamente
                                 colunas_sql = ", ".join(novos_dados.keys())
                                 placeholders = ", ".join([f":{c}" for c in novos_dados.keys()])
                                 query_insert = text(f"INSERT INTO {tabela} ({colunas_sql}) VALUES ({placeholders})")
-                                
                                 with engine.begin() as conn_insert:
                                     conn_insert.execute(query_insert, novos_dados)
-                                
-                                st.success(f"Registro adicionado em {tabela}!")
-                                st.balloons()
-                                st.cache_data.clear() # Limpa o cache para atualizar a tabela acima
+                                st.success("Registro adicionado!")
+                                st.cache_data.clear()
                             except Exception as error:
-                                st.error(f"Erro ao inserir: {error}")
-                        else:
-                            st.warning("Preencha pelo menos um campo.")
+                                st.error(f"Erro: {error}")
             else:
                 st.warning("Sem tabelas no banco.")
 
     except Exception as e:
-        st.error(f"Erro ao ler segredos ou conectar: {e}")
+        st.error(f"Erro: {e}")
