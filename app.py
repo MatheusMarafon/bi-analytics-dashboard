@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.express as px 
+
 # Configurações da página
 st.set_page_config(page_title="Estudo Dashboard", layout="wide")
 
@@ -37,8 +39,8 @@ anos_xp = st.sidebar.slider("Anos de experiência na área:", 0, 20, 1)
 # --- Dia 04 e 05: Layout e Gráficos --- 
 st.title("Estrutura de Layout Avançada")
 
-tab_home, tab_dados, tab_filtros, tab_graficos = st.tabs(
-    ["Início", "Visualização de Dados", "Análise de Filtros", "Gráficos"]
+tab_home, tab_dados, tab_filtros, tab_graficos, tab_plotly = st.tabs(
+    ["Início", "Visualização de Dados", "Análise de Filtros", "Gráficos", "Plotly"]
 )
 
 with tab_home:
@@ -105,3 +107,39 @@ with tab_graficos:
         st.bar_chart(chart_data)
     
     st.caption(f"Dados gerados aleatoriamente para representar {anos_xp} pontos de dados em {cidade}.")
+
+with tab_plotly:
+    st.header("Gráficos Customizados com Plotly Express")
+    
+    # Dados para o gráfico baseados nos filtros
+    df_plotly = pd.DataFrame({
+        "Tecnologia": tecnologias if tecnologias else ["Nenhuma"],
+        "Demanda": np.random.randint(10, 100, size=len(tecnologias)) if tecnologias else [0],
+        "Mercado": np.random.randint(1000, 5000, size=len(tecnologias)) if tecnologias else [0]
+    })
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Gráfico de Barras Plotly")
+        fig_bar = px.bar(
+            df_plotly, 
+            x="Tecnologia", 
+            y="Demanda", 
+            color="Tecnologia",
+            title=f"Demanda em {cidade}",
+            template="plotly_dark"
+        )
+        st.plotly_chart(fig_bar, width='stretch')
+
+    with col2:
+        st.subheader("Relação Demanda vs Mercado")
+        fig_scatter = px.scatter(
+            df_plotly,
+            x="Demanda",
+            y="Mercado",
+            size="Demanda",
+            color="Tecnologia",
+            hover_name="Tecnologia"
+        )
+        st.plotly_chart(fig_scatter, width='stretch')
