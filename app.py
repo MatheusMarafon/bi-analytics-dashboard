@@ -45,8 +45,8 @@ data_range = st.sidebar.date_input(
 # --- Dia 04 e 05: Layout e Gráficos --- 
 st.title("Estrutura de Layout Avançada")
 
-tab_home, tab_dados, tab_filtros, tab_graficos, tab_plotly, tab_tendencia = st.tabs(
-    ["Início", "Visualização de Dados", "Análise de Filtros", "Gráficos", "Plotly", "Tendências Temporais"]
+tab_home, tab_dados, tab_filtros, tab_graficos, tab_plotly, tab_tendencia, tab_comparativo = st.tabs(
+    ["Início", "Visualização de Dados", "Análise de Filtros", "Gráficos", "Plotly", "Tendências Temporais", "Comparativos"]
 )
 
 with tab_home:
@@ -178,3 +178,43 @@ with tab_tendencia:
         st.plotly_chart(fig_linha, width='stretch')
     else:
         st.warning("Por favor, selecione as datas de início e fim.")
+
+with tab_comparativo:
+    st.header("Gráficos de Comparação e Fluxo")
+
+    col_comp1, col_comp2 = st.columns(2)
+
+    with col_comp1:
+        st.subheader("Comparativo por Tecnologia")
+        # Criando dados para barras agrupadas
+        df_comp = pd.DataFrame({
+            "Tecnologia": tecnologias * 2 if tecnologias else ["Geral"] * 2,
+            "Valor": np.random.randint(40, 100, size=len(tecnologias)*2) if tecnologias else [50, 60],
+            "Tipo": ["Realizado"] * len(tecnologias) + ["Previsto"] * len(tecnologias) if tecnologias else ["Realizado", "Previsto"]
+        })
+        
+        fig_agrupado = px.bar(
+            df_comp, 
+            x="Tecnologia", 
+            y="Valor", 
+            color="Tipo", 
+            barmode="group",
+            title="Realizado vs Previsto"
+        )
+        st.plotly_chart(fig_agrupado, width='stretch')
+
+    with col_comp2:
+        st.subheader("Funil de Contratação")
+        # Dados para o gráfico de funil
+        df_funil = pd.DataFrame({
+            "Etapa": ["Visualizações", "Candidaturas", "Entrevistas", "Propostas", "Contratações"],
+            "Quantidade": [1000, 450, 120, 30, 10]
+        })
+        
+        fig_funil = px.funnel(
+            df_funil, 
+            x="Quantidade", 
+            y="Etapa",
+            title="Funil de Recrutamento Tech"
+        )
+        st.plotly_chart(fig_funil, width='stretch')
