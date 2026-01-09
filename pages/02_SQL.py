@@ -5,18 +5,17 @@ import io
 from sqlalchemy import text
 from database import configurar_conexao, buscar_dados_otimizados, listar_tabelas
 
-# Configuração da página
-st.set_page_config(page_title="Explorador SQL", layout="wide")
+# 1. Configurações Iniciais
+st.set_page_config(page_title="Explorador SQL Profissional", layout="wide")
 
 
-# Funções auxiliares de conversão
+# Funções de Conversão para Exportação
 def converter_para_csv(df):
     return df.to_csv(index=False).encode("utf-8")
 
 
 def converter_para_excel(df):
     output = io.BytesIO()
-    # Certifique-se de ter instalado: pip install xlsxwriter
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name="Relatorio")
     return output.getvalue()
@@ -24,7 +23,7 @@ def converter_para_excel(df):
 
 st.header("Explorador de Banco de Dados")
 
-# Garantia de inicialização do estado (caso acesse a página direto)
+# Garantia de Session State
 if "contador_consultas" not in st.session_state:
     st.session_state.contador_consultas = 0
 if "historico_tabelas" not in st.session_state:
@@ -36,87 +35,121 @@ if engine:
     st.info(f"Consultas realizadas nesta sessão: {st.session_state.contador_consultas}")
 
     lista = listar_tabelas(engine)
-    if lista:
-        tabela = st.selectbox("Selecione a tabela:", lista)
+
+    # Validação: Banco sem tabelas
+    if not lista:
+        st.warning("Nenhuma tabela encontrada no banco de dados público.")
+    else:
+        tabela = st.selectbox("Selecione a tabela para explorar:", lista)
 
         if tabela not in st.session_state.historico_tabelas:
             st.session_state.historico_tabelas.append(tabela)
 
-        with engine.connect() as conn:
-            colunas = pd.read_sql(
-                f"SELECT * FROM {tabela} LIMIT 0", conn
-            ).columns.tolist()
+        # Busca colunas com tratamento de erro
+        try:
+            with engine.connect() as conn:
+                colunas = pd.read_sql(
+                    f"SELECT * FROM {tabela} LIMIT 0", conn
+                ).columns.tolist()
+        except Exception as e:
+            st.error(f"Erro ao ler estrutura da tabela: {e}")
+            colunas = []
 
-        cols_sel = st.multiselect("Colunas:", colunas, default=colunas[:3])
+        if colunas:
+            cols_sel = st.multiselect(
+                "Selecione as colunas:", colunas, default=colunas[:3]
+            )
 
-        if st.button("Executar Consulta"):
-            with st.spinner("Buscando dados..."):
-                st.session_state.contador_consultas += 1
-                query = f"SELECT {', '.join(cols_sel)} FROM {tabela} LIMIT 100"
-                df = buscar_dados_otimizados(query, engine)
+            if st.button("Executar Consulta"):
+                with st.spinner(f"Acessando {tabela}..."):
+                    st.session_state.contador_consultas += 1
+                    query = f"SELECT {', '.join(cols_sel)} FROM {tabela} LIMIT 100"
 
-                st.toast("Consulta finalizada com sucesso")
-                st.dataframe(df, width="stretch")
-
-                # --- SEÇÃO DE EXPORTAÇÃO ---
-                st.markdown("###Exportar Resultados")
-                col_csv, col_excel = st.columns(2)
-
-                with col_csv:
-                    st.download_button(
-                        label="Baixar em CSV",
-                        data=converter_para_csv(df),
-                        file_name=f"extração_{tabela}.csv",
-                        mime="text/csv",
-                        width="stretch",
-                    )
-
-                with col_excel:
                     try:
-                        data_excel = converter_para_excel(df)
-                        st.download_button(
-                            label="Baixar em Excel",
-                            data=data_excel,
-                            file_name=f"extração_{tabela}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            width="stretch",
-                        )
+                        df = buscar_dados_otimizados(query, engine)
+
+                        # --- TAREFA: Validação de Dados Vazios ---
+                        if df.empty:
+                            st.warning(
+                                f"A consulta retornou 0 registros para a tabela '{tabela}'."
+                            )
+                        else:
+                            st.toast("Dados carregados!")
+                            st.dataframe(df, width="stretch")
+
+                            # --- SEÇÃO DE EXPORTAÇÃO ---
+                            st.markdown("### Exportar Relatório")
+                            c_csv, c_xls = st.columns(2)
+
+                            with c_csv:
+                                st.download_button(
+                                    label="Baixar CSV",
+                                    data=converter_para_csv(df),
+                                    file_name=f"report_{tabela}.csv",
+                                    mime="text/csv",
+                                )
+                            with c_xls:
+                                try:
+                                    st.download_button(
+                                        label="Baixar Excel",
+                                        data=converter_para_excel(df),
+                                        file_name=f"report_{tabela}.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    )
+                                except:
+                                    st.error(
+                                        "Erro ao gerar Excel. Instale 'xlsxwriter'."
+                                    )
+
                     except Exception as e:
+                        st.error(f"Erro na execução da query: {e}")
+
+            # --- FORMULÁRIO DE INSERT COM VALIDAÇÃO ---
+            st.markdown("---")
+            st.subheader(f"Inserir dados em {tabela}")
+
+            with st.form("form_insert", clear_on_submit=True):
+                novos_dados = {}
+                campos = colunas[:4]
+                col_form = st.columns(len(campos))
+
+                for i, nome in enumerate(campos):
+                    with col_form[i]:
+                        novos_dados[nome] = st.text_input(f"{nome}")
+
+                enviar = st.form_submit_button("Confirmar Inserção")
+
+                if enviar:
+                    # Validação: Impedir envio totalmente vazio
+                    if not any(novos_dados.values()):
                         st.error(
-                            "Erro ao gerar Excel. Verifique se 'xlsxwriter' está instalado."
+                            "Preencha pelo menos um campo para realizar a inserção."
                         )
+                    else:
+                        with st.status("Comunicando com o servidor...") as status:
+                            try:
+                                col_names = ", ".join(novos_dados.keys())
+                                placeholders = ", ".join(
+                                    [f":{c}" for c in novos_dados.keys()]
+                                )
+                                sql_ins = text(
+                                    f"INSERT INTO {tabela} ({col_names}) VALUES ({placeholders})"
+                                )
 
-        # Formulário de INSERT Dinâmico
-        st.markdown("---")
-        with st.form("form_registro", clear_on_submit=True):
-            st.subheader(f"Inserir em {tabela}")
-            novos_dados = {}
-            campos = colunas[:4]
-            cols_layout = st.columns(len(campos))
-            for i, col_name in enumerate(campos):
-                with cols_layout[i]:
-                    novos_dados[col_name] = st.text_input(f"{col_name}")
+                                with engine.begin() as conn:
+                                    conn.execute(sql_ins, novos_dados)
 
-            if st.form_submit_button("Salvar no Banco"):
-                if any(novos_dados.values()):
-                    with st.status("Processando...") as status:
-                        try:
-                            col_names = ", ".join(novos_dados.keys())
-                            placeholders = ", ".join(
-                                [f":{c}" for c in novos_dados.keys()]
-                            )
-                            query_ins = text(
-                                f"INSERT INTO {tabela} ({col_names}) VALUES ({placeholders})"
-                            )
-                            with engine.begin() as conn:
-                                conn.execute(query_ins, novos_dados)
-                            status.update(label="Salvo!", state="complete")
-                            st.toast("Registro armazenado")
-                            st.cache_data.clear()
-                            time.sleep(1)
-                            st.rerun()
-                        except Exception as e:
-                            status.update(label="Erro!", state="error")
-                            st.error(e)
-                else:
-                    st.warning("Preencha ao menos um campo.")
+                                status.update(
+                                    label="Inserção concluída!", state="complete"
+                                )
+                                st.toast("Sucesso!")
+                                st.cache_data.clear()
+                                time.sleep(1)
+                                st.rerun()
+                            except Exception as e:
+                                status.update(label="Falha na operação", state="error")
+                                st.error(f"Detalhes: {e}")
+else:
+    st.error(
+        "Servidor de banco de dados offline. Verifique as credenciais em secrets.toml."
+    )
