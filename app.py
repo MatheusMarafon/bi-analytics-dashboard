@@ -46,6 +46,7 @@ data_range = st.sidebar.date_input(
 
 # --- Dia 01 (Semana 4): Funções com Cache ---
 
+
 @st.cache_data(ttl=600)  # O cache expira em 10 minutos (600 segundos)
 def buscar_dados_otimizados(query_string, _engine):
     """
@@ -56,12 +57,38 @@ def buscar_dados_otimizados(query_string, _engine):
         df = pd.read_sql(query_string, conn)
     return df
 
+
 @st.cache_data
 def listar_tabelas(_engine):
     query = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
     with _engine.connect() as conn:
-        return pd.read_sql(query, conn)['table_name'].tolist()
-    
+        return pd.read_sql(query, conn)["table_name"].tolist()
+
+
+# --- Dia 02 (Semana 4): Cache de Recurso (Conexão) ---
+
+
+@st.cache_resource
+def configurar_conexao():
+    """
+    Cria e armazena o engine de conexão com o banco.
+    O @st.cache_resource garante que o engine seja criado apenas UMA vez,
+    evitando abrir centenas de conexões desnecessárias com o Postgres.
+    """
+    try:
+        db = st.secrets["postgres"]
+        conn_url = (
+            f"postgresql://{db['user']}@{db['host']}:{db['port']}/{db['database']}"
+        )
+        return create_engine(conn_url)
+    except Exception as e:
+        st.error(f"Erro ao configurar conexão global: {e}")
+        return None
+
+
+# Chamada global para obter o engine (fora das abas)
+engine = configurar_conexao()
+
 # --- Dia 04 e 05: Layout e Gráficos ---
 st.title("Estrutura de Layout Avançada")
 
@@ -335,7 +362,13 @@ with tab_mapa:
 
 with tab_design:
     st.header("Identidade Visual e Customização")
-
+    st.info(
+        """
+    **Diferença entre Caches:**
+    - **cache_data:** Armazena o conteúdo (ex: o resultado da tabela de vendas).
+    - **cache_resource:** Armazena o conector (ex: o túnel de acesso ao Postgres).
+    """
+    )
     # Criando dados para o exemplo de design
     df_design = pd.DataFrame(
         {
@@ -377,81 +410,105 @@ with tab_design:
     st.success("Design finalizado com identidade visual consistente!")
 
 with tab_sql:
-    st.header("Explorador de Dados SQL Otimizado")
-    
-    try:
-        db = st.secrets["postgres"]
-        conn_url = f"postgresql://{db['user']}@{db['host']}:{db['port']}/{db['database']}"
-        engine = create_engine(conn_url)
-        
-        # 1. Lista as tabelas usando a função com CACHE
-        lista_tabelas = listar_tabelas(engine)
+    st.header("Explorador de Dados SQL (Arquitetura Pro)")
 
-        if lista_tabelas:
-            tabela = st.selectbox("Selecione a tabela:", lista_tabelas)
-            
-            # Buscamos colunas (operação rápida, não precisa de cache longo)
-            with engine.connect() as conn:
-                colunas_disponiveis = pd.read_sql(f"SELECT * FROM {tabela} LIMIT 0", conn).columns.tolist()
-            
-            colunas_selecionadas = st.multiselect(
-                "Selecione as colunas (Evite SELECT *):", 
-                options=colunas_disponiveis,
-                default=colunas_disponiveis[:3]
-            )
+    # O 'engine' agora vem da função cacheada @st.cache_resource no topo do script
+    if engine is not None:
+        try:
+            # 1. Busca lista de tabelas usando CACHE
+            lista_tabelas = listar_tabelas(engine)
 
-            if colunas_selecionadas:
-                start_time = time.time()
-                
-                cols_str = ", ".join(colunas_selecionadas)
-                query_final = f"SELECT {cols_str} FROM {tabela} WHERE 1=1"
-                
-                if 'cidade' in colunas_disponiveis:
-                    query_final += f" AND cidade = '{cidade}'"
+            if lista_tabelas:
+                tabela = st.selectbox(
+                    "Selecione a tabela para explorar:", lista_tabelas
+                )
 
-                # 2. BUSCA OS DADOS USANDO A FUNÇÃO COM CACHE (Pulo do gato!)
-                df_res = buscar_dados_otimizados(query_final, engine)
-                
-                end_time = time.time()
-                
-                # Display de Performance
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Tempo de Resposta", f"{end_time - start_time:.4f}s")
-                c2.metric("Linhas", len(df_res))
-                with c3:
-                    with engine.connect() as conn:
-                        size_res = conn.execute(text(f"SELECT pg_size_pretty(pg_total_relation_size('{tabela}'))")).fetchone()
-                        st.metric("Tamanho em Disco", size_res[0])
+                # 2. Busca colunas da tabela selecionada (operação rápida)
+                with engine.connect() as conn:
+                    colunas_disponiveis = pd.read_sql(
+                        f"SELECT * FROM {tabela} LIMIT 0", conn
+                    ).columns.tolist()
 
-                st.code(query_final, language="sql") 
-                st.dataframe(df_res, width='stretch')
-            
-            # --- Formulário de Inserção (CRUD) Mantido ---
-            st.markdown("---")
-            st.subheader(f"Inserir Novos Dados em: {tabela}")
-            with st.form("form_registro", clear_on_submit=True):
-                novos_dados = {}
-                st.write("Preencha os campos abaixo:")
-                cols = st.columns(len(colunas_disponiveis[:4]))
-                for i, col_name in enumerate(colunas_disponiveis[:4]):
-                    with cols[i]:
-                        novos_dados[col_name] = st.text_input(f"Coluna: {col_name}")
+                colunas_selecionadas = st.multiselect(
+                    "Otimização: Selecione apenas as colunas necessárias:",
+                    options=colunas_disponiveis,
+                    default=(
+                        colunas_disponiveis[:3]
+                        if len(colunas_disponiveis) >= 3
+                        else colunas_disponiveis
+                    ),
+                )
 
-                if st.form_submit_button("Salvar no Banco"):
-                    if any(novos_dados.values()):
-                        try:
-                            colunas_sql = ", ".join(novos_dados.keys())
-                            placeholders = ", ".join([f":{c}" for c in novos_dados.keys()])
-                            query_insert = text(f"INSERT INTO {tabela} ({colunas_sql}) VALUES ({placeholders})")
-                            with engine.begin() as conn_insert:
-                                conn_insert.execute(query_insert, novos_dados)
-                            st.success("Registro adicionado!")
-                            # Limpamos o cache para que a consulta mostre o dado novo
-                            st.cache_data.clear()
-                        except Exception as error:
-                            st.error(f"Erro: {error}")
-        else:
-            st.warning("Sem tabelas no banco.")
+                if colunas_selecionadas:
+                    # Preparando a Query
+                    cols_str = ", ".join(colunas_selecionadas)
+                    query_final = f"SELECT {cols_str} FROM {tabela} WHERE 1=1"
 
-    except Exception as e:
-        st.error(f"Erro: {e}")
+                    if "cidade" in colunas_disponiveis:
+                        query_final += f" AND cidade = '{cidade}'"
+
+                    # 3. Execução com medição de tempo e CACHE DE DADOS
+                    start_time = time.time()
+                    df_res = buscar_dados_otimizados(query_final, engine)
+                    end_time = time.time()
+
+                    # Dashboard de Performance
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Tempo de Resposta", f"{end_time - start_time:.4f}s")
+                    c2.metric("Linhas", len(df_res))
+                    with c3:
+                        with engine.connect() as conn:
+                            size_res = conn.execute(
+                                text(
+                                    f"SELECT pg_size_pretty(pg_total_relation_size('{tabela}'))"
+                                )
+                            ).fetchone()
+                            st.metric("Espaço em Disco", size_res[0])
+
+                    st.code(query_final, language="sql")
+                    st.dataframe(df_res, width="stretch")
+
+                # 4. Formulário CRUD Dinâmico
+                st.markdown("---")
+                st.subheader(f"Inserir Registro em {tabela}")
+
+                with st.form("form_registro_final", clear_on_submit=True):
+                    novos_dados = {}
+                    # Exibe inputs apenas para as colunas selecionadas ou as 4 primeiras
+                    campos_form = colunas_disponiveis[:4]
+                    cols_form = st.columns(len(campos_form))
+
+                    for i, col_name in enumerate(campos_form):
+                        with cols_form[i]:
+                            novos_dados[col_name] = st.text_input(f"{col_name}")
+
+                    if st.form_submit_button("Salvar no PostgreSQL"):
+                        if any(novos_dados.values()):
+                            try:
+                                col_names = ", ".join(novos_dados.keys())
+                                placeholders = ", ".join(
+                                    [f":{c}" for c in novos_dados.keys()]
+                                )
+                                query_insert = text(
+                                    f"INSERT INTO {tabela} ({col_names}) VALUES ({placeholders})"
+                                )
+
+                                with engine.begin() as conn_insert:
+                                    conn_insert.execute(query_insert, novos_dados)
+
+                                st.success(
+                                    "Registro salvo! Limpando cache para atualizar dados..."
+                                )
+                                st.cache_data.clear()  # Garante que o BI mostre o dado novo
+                                st.rerun()  # Recarrega a página para atualizar o dataframe acima
+                            except Exception as error:
+                                st.error(f"Erro no INSERT: {error}")
+                        else:
+                            st.warning("Preencha ao menos um campo.")
+            else:
+                st.warning("Nenhuma tabela encontrada no schema 'public'.")
+
+        except Exception as e:
+            st.error(f"Erro durante a exploração: {e}")
+    else:
+        st.error("Engine de conexão não disponível. Verifique os Secrets.")
