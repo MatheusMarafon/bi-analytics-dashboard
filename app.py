@@ -44,6 +44,24 @@ data_range = st.sidebar.date_input(
     value=(pd.to_datetime("2025-01-01"), pd.to_datetime("2025-12-31")),
 )
 
+# --- Dia 01 (Semana 4): Funções com Cache ---
+
+@st.cache_data(ttl=600)  # O cache expira em 10 minutos (600 segundos)
+def buscar_dados_otimizados(query_string, _engine):
+    """
+    Executa a query e armazena o resultado em cache.
+    O '_' no engine diz ao Streamlit para não tentar 'hashear' o objeto de conexão.
+    """
+    with _engine.connect() as conn:
+        df = pd.read_sql(query_string, conn)
+    return df
+
+@st.cache_data
+def listar_tabelas(_engine):
+    query = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
+    with _engine.connect() as conn:
+        return pd.read_sql(query, conn)['table_name'].tolist()
+    
 # --- Dia 04 e 05: Layout e Gráficos ---
 st.title("Estrutura de Layout Avançada")
 
@@ -366,73 +384,74 @@ with tab_sql:
         conn_url = f"postgresql://{db['user']}@{db['host']}:{db['port']}/{db['database']}"
         engine = create_engine(conn_url)
         
-        with engine.connect() as conn:
-            query_tabelas = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
-            lista_tabelas = pd.read_sql(query_tabelas, conn)['table_name'].tolist()
+        # 1. Lista as tabelas usando a função com CACHE
+        lista_tabelas = listar_tabelas(engine)
 
-            if lista_tabelas:
-                tabela = st.selectbox("Selecione a tabela:", lista_tabelas)
-                
-                # --- OTIMIZAÇÃO DIA 05: Seleção de Colunas ---
+        if lista_tabelas:
+            tabela = st.selectbox("Selecione a tabela:", lista_tabelas)
+            
+            # Buscamos colunas (operação rápida, não precisa de cache longo)
+            with engine.connect() as conn:
                 colunas_disponiveis = pd.read_sql(f"SELECT * FROM {tabela} LIMIT 0", conn).columns.tolist()
+            
+            colunas_selecionadas = st.multiselect(
+                "Selecione as colunas (Evite SELECT *):", 
+                options=colunas_disponiveis,
+                default=colunas_disponiveis[:3]
+            )
+
+            if colunas_selecionadas:
+                start_time = time.time()
                 
-                colunas_selecionadas = st.multiselect(
-                    "Selecione as colunas (Evite SELECT *):", 
-                    options=colunas_disponiveis,
-                    default=colunas_disponiveis[:3]
-                )
-
-                if colunas_selecionadas:
-                    # Medindo o tempo de execução
-                    start_time = time.time()
-                    
-                    cols_str = ", ".join(colunas_selecionadas)
-                    query = f"SELECT {cols_str} FROM {tabela} WHERE 1=1"
-                    
-                    if 'cidade' in colunas_disponiveis:
-                        query += f" AND cidade = '{cidade}'"
-
-                    df_res = pd.read_sql(f"{query} LIMIT 1000", conn)
-                    
-                    end_time = time.time()
-                    
-                    # Display de Performance
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Tempo", f"{end_time - start_time:.4f}s")
-                    c2.metric("Linhas", len(df_res))
-                    with c3:
-                         # Mostra o tamanho real da tabela no Postgres
-                         size_res = conn.execute(text(f"SELECT pg_size_pretty(pg_total_relation_size('{tabela}'))")).fetchone()
-                         st.metric("Tamanho em Disco", size_res[0])
-
-                    st.code(query, language="sql") 
-                    st.dataframe(df_res, width='stretch')
+                cols_str = ", ".join(colunas_selecionadas)
+                query_final = f"SELECT {cols_str} FROM {tabela} WHERE 1=1"
                 
-                # 4. Formulário de Inserção (Mantido seu código dinâmico)
-                st.markdown("---")
-                st.subheader(f"Inserir Novos Dados em: {tabela}")
-                with st.form("form_registro", clear_on_submit=True):
-                    novos_dados = {}
-                    st.write("Preencha os campos abaixo:")
-                    cols = st.columns(len(colunas_disponiveis[:4]))
-                    for i, col_name in enumerate(colunas_disponiveis[:4]):
-                        with cols[i]:
-                            novos_dados[col_name] = st.text_input(f"Coluna: {col_name}")
+                if 'cidade' in colunas_disponiveis:
+                    query_final += f" AND cidade = '{cidade}'"
 
-                    if st.form_submit_button("Salvar no Banco"):
-                        if any(novos_dados.values()):
-                            try:
-                                colunas_sql = ", ".join(novos_dados.keys())
-                                placeholders = ", ".join([f":{c}" for c in novos_dados.keys()])
-                                query_insert = text(f"INSERT INTO {tabela} ({colunas_sql}) VALUES ({placeholders})")
-                                with engine.begin() as conn_insert:
-                                    conn_insert.execute(query_insert, novos_dados)
-                                st.success("Registro adicionado!")
-                                st.cache_data.clear()
-                            except Exception as error:
-                                st.error(f"Erro: {error}")
-            else:
-                st.warning("Sem tabelas no banco.")
+                # 2. BUSCA OS DADOS USANDO A FUNÇÃO COM CACHE (Pulo do gato!)
+                df_res = buscar_dados_otimizados(query_final, engine)
+                
+                end_time = time.time()
+                
+                # Display de Performance
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Tempo de Resposta", f"{end_time - start_time:.4f}s")
+                c2.metric("Linhas", len(df_res))
+                with c3:
+                    with engine.connect() as conn:
+                        size_res = conn.execute(text(f"SELECT pg_size_pretty(pg_total_relation_size('{tabela}'))")).fetchone()
+                        st.metric("Tamanho em Disco", size_res[0])
+
+                st.code(query_final, language="sql") 
+                st.dataframe(df_res, width='stretch')
+            
+            # --- Formulário de Inserção (CRUD) Mantido ---
+            st.markdown("---")
+            st.subheader(f"Inserir Novos Dados em: {tabela}")
+            with st.form("form_registro", clear_on_submit=True):
+                novos_dados = {}
+                st.write("Preencha os campos abaixo:")
+                cols = st.columns(len(colunas_disponiveis[:4]))
+                for i, col_name in enumerate(colunas_disponiveis[:4]):
+                    with cols[i]:
+                        novos_dados[col_name] = st.text_input(f"Coluna: {col_name}")
+
+                if st.form_submit_button("Salvar no Banco"):
+                    if any(novos_dados.values()):
+                        try:
+                            colunas_sql = ", ".join(novos_dados.keys())
+                            placeholders = ", ".join([f":{c}" for c in novos_dados.keys()])
+                            query_insert = text(f"INSERT INTO {tabela} ({colunas_sql}) VALUES ({placeholders})")
+                            with engine.begin() as conn_insert:
+                                conn_insert.execute(query_insert, novos_dados)
+                            st.success("Registro adicionado!")
+                            # Limpamos o cache para que a consulta mostre o dado novo
+                            st.cache_data.clear()
+                        except Exception as error:
+                            st.error(f"Erro: {error}")
+        else:
+            st.warning("Sem tabelas no banco.")
 
     except Exception as e:
         st.error(f"Erro: {e}")
